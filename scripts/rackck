@@ -1,0 +1,147 @@
+#!/usr/bin/perl -w
+
+#
+# Youssef Eldakar <youssef.eldakar@bibalex.org>
+#
+
+#
+
+
+
+#
+
+use strict;
+
+use File::Basename;
+use Getopt::Std;
+
+use POSIX;
+
+use lib "/afs/archive.bibalex.org/git/racktk/lib";
+use Racktk::Select;
+
+my %opts;
+
+getopts ( "cr:ag:m:", \%opts ) 
+
+  && (    defined $opts{a}
+       || defined $opts{g}
+       || defined $opts{m} ) || help () && exit 1;
+
+
+    if ( my @results = Racktk::Select::select ( \%opts ) )
+    {
+      # Host selection returned results to process.
+      ck_loop
+           ( @results );
+    }
+ else
+    {
+      help ();
+    }
+
+
+sub help
+{
+  print STDERR basename ( $0 ), " ", "[-a] [-g groups] [-m ranges]\n";
+}
+
+sub ck_loop
+{
+  my $i;
+  my $n;
+
+  my $t;
+
+  # Individual host status code: 0 = up and accessible via remote
+  # shell, 1 = up but inaccessible via remote shell, 2 = down. The
+  # codes are inspired by the Nagios status codes for OK, warning, and
+  # critical, respectively.
+  my $status;
+
+  my $host;
+
+  # The keys of this hash are host names. The codes are references to
+  # 2-element lists, where the first element is the host status code,
+  # and the second element is a change flag that is set if the host
+  # changes status relative to the previous pass and reset otherwise.
+  my %hosts;
+
+  # A tally of how many hosts change status during this pass.
+  my $status_changes;
+
+  my %status_strings = ( 0 => "UP with SSH", 1 => "UP", 2 => "DOWN" );
+
+  while ( 1 )
+  {
+    $status_changes = 0;
+
+    for ( $i = 0, $n = @_ - 1; $i <= $n; $i++ )
+    {
+      # Check if the host responds to a single ping within a
+      # one-second timeout.
+      `ping -c 1 -W 1 $_[$i]->{h} >/dev/null 2>&1`;
+
+      if ( $? != 0 )
+      {
+        $status = 2;
+      }
+      else
+      {
+        # The ping check was positive. Now, check if the host is
+        # accessible via remote shell.
+        `/usr/lib/nagios/plugins/check_ssh -H $_[$i]->{h} >/dev/null 2>&1`;
+
+        if ( $? != 0 )
+        {
+          $status = 1;
+        }
+        else
+        {
+          $status = 0;
+        }
+      }
+
+      if ( ! defined ( $hosts{$_[$i]->{h}} ) ||
+        $hosts{$_[$i]->{h}}->[0] != $status )
+      {
+        $hosts{$_[$i]->{h}} = [ $status, 1 ];
+        $status_changes++;
+      }
+      else
+      {
+        $hosts{$_[$i]->{h}} = [ $status, 0 ];
+      }
+    }
+
+    # Get the current local time and format it into a string such as
+    # in /var/log/syslog.
+    $t = strftime ( "%b %e %H:%M:%S", localtime );
+
+    if ( $status_changes )
+    {
+      # Print the local time string.
+      printf "$t\n";
+
+      foreach $status ( sort keys %status_strings )
+      {
+        # Print the status string.
+        printf " " x 2 . "$status_strings{$status}\n";
+
+        foreach $host ( sort keys %hosts )
+        {
+          if ( $hosts{$host}->[0] == $status )
+          {
+            # Print the host name if it currently belongs under this
+            # status. Append an asterisk to the host name if it
+            # changed status since the previous pass.
+            printf " " x 4 . "$host%s\n", $hosts{$host}->[1] ? "*" : "";
+          }
+        }
+      }
+    }
+
+    # Pause at the end of each pass.
+    sleep ( 2 );
+  }
+}

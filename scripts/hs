@@ -1,0 +1,206 @@
+#!/usr/bin/perl -w
+
+#
+# Youssef Eldakar <youssef.eldakar@bibalex.org>
+#
+
+#
+# I map a host name, range of host names, or host names in a DSH group to IP
+# address in decimal and hexadecimal notation. A host name string must be made
+# up of an alphabetic prefix immediately followed by a numeric suffix. In a
+# host name range, the alphabetic prefix must match string-wise, and the
+# numeric suffix must match length-wise in the range ends. Specify -h to print
+# the host name, -i to print the IP address in decimal notation, and -x to
+# print the IP address in hexadecimal notation. Specifying none of -h, -i, and
+# -x is equivalent to specifying them all. Use -g to specify the name of a DSH
+# group.
+#
+
+use strict;
+
+use File::Basename;
+use Getopt::Std;
+
+use lib "/afs/archive.bibalex.org/git/racktk/lib";
+use Racktk::Select;
+
+my %opts;
+
+getopts ( "hixeag:m:", \%opts ) 
+
+  && (    defined $opts{a}
+       || defined $opts{g}
+       || defined $opts{m} ) && ! @ARGV || help () && exit 1;
+
+
+    if ( my @results = Racktk::Select::select( \%opts ) )
+    {
+      show (@results);
+    }
+ else
+    {
+      help ();
+    }
+
+
+sub help
+{
+  print STDERR basename ( $0 ), " ", "[-hixea] [-g groups] [-m ranges]\n";
+}
+
+
+sub show
+{
+  foreach ( @_ )
+  {
+    my @fields;
+
+    if ( ! ( $opts{h} || $opts{i} || $opts{x} ) )
+    {
+
+        push @fields, $_->{h};
+
+
+        push @fields, $_->{i};
+
+
+        push @fields, $_->{x};
+    }
+    else
+    {
+      if ( $opts{h} )
+      {
+
+        push @fields, $_->{h};
+      }
+
+      if ( $opts{i} )
+      {
+
+        push @fields, $_->{i};
+      }
+
+      if ( $opts{x} )
+      {
+
+        push @fields, $_->{x};
+      }
+    }
+
+    print join ( " ", @fields ), "\n";
+  }
+}
+
+
+
+sub lookup_group_and_show # show as we go
+{
+   open    FH,
+    locate_group ( "$_[0]" ) ||
+
+    return undef;
+
+  while ( <FH> )
+  {
+    # Double quotes necessary around subpattern variables
+    lookup_range_and_show ( "$1", "$1" ) if ( /^\s*(\w+)/ );
+  }
+
+  close    FH;
+}
+
+sub lookup_range_and_show # show as we go
+{
+  my @m;
+  my @n;
+
+  my @i;
+
+  my $i; # address
+  my $x; # address (hexadecimal)
+
+  my $h; # hostname
+  my $d = `hostname -d`;
+
+  my $w;
+
+  if ( $_[0] =~ /^(\D+)(\d+)$/ )
+  {
+    @m = ( $1, $2 );
+  }
+  else
+  {
+    return undef;
+  }
+
+  if ( $_[1] =~ /^(\D+)(\d+)$/ )
+  {
+    @n = ( $1, $2 );
+  }
+  else
+  {
+    return undef;
+  }
+
+  # Prefix has to match string-wise
+ 
+  if (        $m[0] ne        $n[0] )
+  {
+    return undef;
+  }
+
+  # Suffix has to match length-wise
+
+  if ( length $m[1] != length $n[1] )
+  {
+    return undef;
+  }
+
+  @i = @m;
+  $w = length $i[1];
+
+  while ( $i[1] <= $n[1] )
+  {
+    $h = join "", @i;
+
+    $i = `dig +short $h.$d`;
+    chomp $i;
+
+    $x = format_ip ( $i );
+
+    if ( "$i" )
+    {
+
+    if ( ! ( $opts{h} || $opts{i} || $opts{x} ) )
+    {
+        print "$h", " ";
+
+        print "$i", " ";
+
+        print "$x", " ";
+    }
+    else
+    {
+      if ( $opts{h} )
+      {
+        print "$h", " ";
+      }
+
+      if ( $opts{i} )
+      {
+        print "$i", " ";
+      }
+
+      if ( $opts{x} )
+      {
+        print "$x", " ";
+      }
+    }
+
+        print "\n";
+
+    }
+
+    $i[1] = sprintf ( "%0${w}d", $i[1] + 1 );
+  }
+}

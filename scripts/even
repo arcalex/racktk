@@ -1,0 +1,65 @@
+#!/usr/bin/perl -anl
+
+#
+# Youssef Eldakar <youssef.eldakar@bibalex.org>
+#
+
+#
+# I select odd elements in the input if my name is odd or even elements
+# otherwise. The selection is based on either a 0-referenced sequence (-0 or
+# -S), where the zeroth element is considered even, a 1-referenced sequence
+# (-s), or on value (-v). When selection is based on value, leading non-digits
+# are ignored. I default on selection based on a 0-referenced sequence.
+#
+
+use File::Basename;
+use Getopt::Std;
+
+BEGIN
+{
+
+$odd = basename ( $0 ) eq "odd" ? 1 : 0;
+getopts ( "0Ssv", \%opts );
+
+# At the time of writing this comment block, the only implemented options are
+# the selection mode ones. However, the following, which sets a default
+# selection mode unless one is specified, is better than simply testing if the
+# options hash is empty in case a non-selection-mode option is implemented
+# later on at some point.
+
+unless ( defined ( $opts{0} ) ||
+         defined ( $opts{S} ) ||
+         defined ( $opts{s} ) ||
+         defined ( $opts{v} ) )
+    {
+                   $opts{0} = 1;
+    }
+
+
+}
+
+    if ( defined ( $opts{0} ) ||
+         defined ( $opts{S} ) ) # based on sequence (0-referenced)
+    {
+      if ( $. % 2 != $odd )
+      {
+        print;
+      }
+    }
+
+    if ( defined ( $opts{s} ) ) # based on sequence (1-referenced)
+    {
+      if ( $. % 2 == $odd )
+      {
+        print;
+      }
+    }
+
+    if ( defined ( $opts{v} ) ) # based on value
+    {
+      if ( /(\d+)$/ and
+           $1 % 2 == $odd )
+      {
+        print;
+      }
+    }

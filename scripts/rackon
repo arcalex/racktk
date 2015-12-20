@@ -1,0 +1,8 @@
+#!/bin/sh
+
+#
+# Youssef Eldakar <youssef.eldakar@bibalex.org>
+#
+
+
+hs -h "$@" | while read i;do etherwake $i;done

@@ -1,0 +1,248 @@
+#!/usr/bin/perl -w
+
+#
+# Youssef Eldakar <youssef.eldakar@bibalex.org>
+#
+
+#
+# I add host and NFS principals to KRB5 database, write host and NFS keys to
+# keytab file and propagate to host, and write NSS-LDAP key to keytab file and
+# propagate to hosts.
+#
+
+use strict;
+
+use File::Basename;
+use Getopt::Std;
+
+use lib "/afs/archive.bibalex.org/git/racktk/lib";
+use Racktk::Select;
+
+         # ( "krb5.keytab" => [ "host/&", "nfs/&" ], "libnss-ldap.keytab" => [ "nssldap" ] );
+my %tabs = ( "krb5.keytab" => [ "host/&"          ], "libnss-ldap.keytab" => [ "nssldap" ] );
+
+my %opts;
+
+# Concurrency (-c option) currently not implemented and may never be.
+getopts ( "cr:ag:m:", \%opts ) 
+
+  && (    defined $opts{a}
+       || defined $opts{g}
+       || defined $opts{m} ) && ! @ARGV || help () && exit 1;
+#      || defined $opts{m} )            || help () && exit 1;
+
+unless ( defined ( $opts{r} ) )
+{
+  $opts{r} = "rcp";
+}
+
+# credentials ( ( { "h" => $ARGV[0] } ) );
+# exit 0;
+
+
+#   if ( @ARGV == 1 )
+#   {
+#     if ( my @results = Racktk::Select::lookup_range ( $ARGV[0], $ARGV[0] )
+#        )
+#     {
+#       credentials ( @results );
+#     }
+#   }
+#elsif ( @ARGV == 2 )
+#   {
+#     if ( my @results = Racktk::Select::lookup_range ( $ARGV[0], $ARGV[1] )
+#        )
+#     {
+#       credentials ( @results );
+#     }
+#   }
+#elsif ( $opts{g} )
+#   {
+#     if ( my @results = Racktk::Select::lookup_group ( $opts{g} )
+#        )
+#     {
+#       credentials ( @results );
+#     }
+#   }
+#else
+#   {
+#     help ();
+#   }
+
+
+my @results;
+my %results_hash;
+
+my @include;
+my @exclude;
+
+#   if ( @ARGV >= 1 )
+    if ( $opts{m} )
+    {
+#     @results = ( @results, map { Racktk::Select::lookup_ranges ( $_      , 0 ) } @ARGV );
+
+#     @include = ( @include, map { Racktk::Select::lookup_ranges ( $_      , 0 ) } @ARGV );
+      @include = ( @include,       Racktk::Select::lookup_ranges ( $opts{m}, 0 )         );
+#     @exclude = ( @exclude, map { Racktk::Select::lookup_ranges ( $_      , 1 ) } @ARGV );
+      @exclude = ( @exclude,       Racktk::Select::lookup_ranges ( $opts{m}, 1 )         );
+    }
+
+    if ( $opts{g} )
+    {
+#     @results = ( @results,       Racktk::Select::lookup_groups ( $opts{g}, 0 )         );
+
+      @include = ( @include,       Racktk::Select::lookup_groups ( $opts{g}, 0 )         );
+      @exclude = ( @exclude,       Racktk::Select::lookup_groups ( $opts{g}, 1 )         );
+    }
+
+    if ( $opts{a} )
+    {
+#     @results = ( @results,       Racktk::Select::lookup_groups ( "all"   , 0 )         );
+
+      @include = ( @include,       Racktk::Select::lookup_groups ( "all"   , 0 )         );
+      @exclude = ( @exclude,       Racktk::Select::lookup_groups ( "all"   , 1 )         );
+    }
+
+#   # SORT and UNIQ
+
+#   %results_hash = ();
+
+#   @results = grep { ! $results_hash{ $_->{h} }++ }
+#     ( sort { $a->{h} cmp $b->{h} } @results );
+
+    # SORT and UNIQ
+
+    %results_hash = ();
+
+    @include = grep { ! $results_hash{ $_->{h} }++ }
+      ( sort { $a->{h} cmp $b->{h} } @include );
+
+    # SORT and UNIQ
+
+    %results_hash = ();
+
+    @exclude = grep { ! $results_hash{ $_->{h} }++ }
+      ( sort { $a->{h} cmp $b->{h} } @exclude );
+
+    @results = Racktk::Select::exls (
+      \@include,
+      \@exclude );
+
+    if ( @results )
+    {
+      credentials
+           ( @results );
+    }
+ else
+    {
+      help ();
+    }
+
+
+#   if ( my @results = Racktk::Select::select ( \%opts ) )
+#   {
+#     # Host selection returned results to process.
+#     credentials
+#          ( @results );
+#   }
+#else
+#   {
+#     help ();
+#   }
+
+
+sub help
+{
+  print STDERR basename ( $0 ), " ", "[-r rcp] [-a] [-g groups] [-m ranges]\n";
+}
+
+sub credentials
+{
+  my $i;
+  my $n;
+
+  my $d = `hostname -d`;
+  chomp $d;
+
+  my $k;
+  my $p;
+
+  # Substitutable/duplicatable.
+  my $s;
+  my $c;
+
+  my @command_queue;
+
+  for ( $i = 0, $n = @_ - 1; $i <= $n; $i++ )
+  {
+    foreach $k ( keys %tabs )
+    {
+      $s = 0;
+      $c = 0;
+
+      @command_queue = ();
+
+      if ( ! -e "/tmp/$k" )
+      {
+        foreach $p ( map $_, @{ $tabs{$k} } )
+        {
+          # EXPORT KEY
+
+          if ( $p =~ /\&/ )
+          {
+            $s = 1, $p =~ s/\&/$_[$i]->{h}\.$d/;
+          }
+
+          # Beware how the following changes the password. The Kerberos
+          # administrative protocol has no way of extracting keys from the
+          # database by design; it prevents a compromised administrative
+          # account from reading out keys from the database.
+          push @command_queue, qq\2> /dev/null kadmin.local -q "listprincs" | 2> /dev/null grep $p || 2> /dev/null kadmin.local -q "addprinc -randkey $p" ; 2> /dev/null kadmin.local -q "ktadd -k /tmp/$k $p"\;
+        }
+
+        if ( $s || ! -e "/etc/$k" )
+        {
+          # Batch execute command queue.
+          `$_` foreach ( @command_queue );
+        }
+        else
+        {
+          $c = 1;
+        }
+      }
+
+      if ( $c )
+      {
+        # DEPLOY KEY
+
+        `2> /dev/null $opts{r} /etc/$k $_[$i]->{h}:/etc/`;
+
+        if ( $? )
+        {
+          print STDERR basename $0 .
+                               ": $_[$i]->{h}: Unable to deploy keytab: $k\n";
+        }
+      }
+      else
+      {
+        # DEPLOY KEY
+
+        `2> /dev/null $opts{r} /tmp/$k $_[$i]->{h}:/etc/`;
+
+        if ( $? )
+        {
+          print STDERR basename $0 .
+                               ": $_[$i]->{h}: Unable to deploy keytab: $k\n";
+        }
+      }
+
+      if ( $s || $i == $n )
+      {
+      
+        # DELETE KEY
+
+        `2> /dev/null  rm /tmp/$k`;
+      }
+    }
+  }
+}

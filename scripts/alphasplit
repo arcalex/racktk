@@ -1,0 +1,39 @@
+#!/usr/bin/perl
+
+$unsorted = undef;
+
+# Range start, range end.
+($s1, $s2) = @ARGV;
+
+$in_range = undef;
+
+while (<STDIN>)
+{
+  if (!$in_range)
+  {
+    # $s1 is inclusive.
+    if (($_ cmp $s1) >= 0)
+    {
+      $in_range = 1;
+      print;
+    }
+  }
+  else
+  {
+    # $s2 is exclusive.
+    if (($_ cmp $s2) >= 0)
+    {
+      $in_range = undef;
+
+      unless ($unsorted)
+      {
+        last;
+      }
+    }
+    else
+    {
+      print;
+    }
+  }
+}
+

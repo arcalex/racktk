@@ -1,0 +1,11 @@
+#!/usr/bin/perl -w
+
+#
+# Youssef Eldakar <youssef.eldakar@bibalex.org>
+#
+
+# rsh "$@" || echo $0 "$@" | at now + 240 minutes 2> /dev/null
+
+use strict;
+
+use Getopt::Std;

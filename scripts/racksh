@@ -1,0 +1,63 @@
+#!/usr/bin/perl -w
+
+#
+# Youssef Eldakar <youssef.eldakar@bibalex.org>
+#
+
+#
+
+
+
+#
+
+use strict;
+
+use File::Basename;
+use Getopt::Std;
+
+use lib "/afs/archive.bibalex.org/git/racktk/lib";
+use Racktk::Select;
+
+my %opts;
+
+getopts ( "cr:ag:m:", \%opts ) 
+
+  && (    defined $opts{a}
+       || defined $opts{g}
+       || defined $opts{m} ) || help () && exit 1;
+
+unless ( defined ( $opts{r} ) )
+{
+  $opts{r} = "rsh";
+}
+
+
+    if ( my @results = Racktk::Select::select ( \%opts ) )
+    {
+      # Host selection returned results to process.
+      sh
+           ( @results );
+    }
+ else
+    {
+      help ();
+    }
+
+
+sub help
+{
+  print STDERR basename ( $0 ), " ", "[-r rsh] [-a] [-g groups] [-m ranges]\n";
+}
+
+sub sh
+{
+  my $i;
+  my $n;
+
+
+
+  for ( $i = 0, $n = @_ - 1; $i <= $n; $i++ )
+  {
+
+  }
+}

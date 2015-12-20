@@ -1,0 +1,8 @@
+#!/bin/sh
+
+#
+# Youssef Eldakar <youssef.eldakar@bibalex.org>
+#
+
+
+hs -h "$@" | while read i;do < /dev/null rsh $i 'reboot > /dev/null 2> /dev/null &';done

@@ -1,0 +1,48 @@
+#!/usr/bin/perl -wl
+
+#
+# Youssef Eldakar <youssef.eldakar@bibalex.org>
+#
+
+use strict;
+
+my $subcommand = shift;
+my $s;
+
+    if ( $subcommand eq "count" )
+    {
+      while ( <> )
+      {
+      }
+
+      print $.;
+    }
+ elsif ( $subcommand eq "sigma" )
+    {
+      while ( <> )
+      {
+        $s += $_;
+      }
+
+      print $s;
+    }
+ elsif ( $subcommand eq "delta" )
+    {
+      while ( <> )
+      {
+        chomp;
+
+            if ( ! defined $b )
+            {
+              $b = $_ and print $b;
+            }
+         else
+            {
+              $a = $b;
+              $b = $_ and print $b, " ", $b - $a;
+            }
+      }
+    }
+ else
+    {
+    }

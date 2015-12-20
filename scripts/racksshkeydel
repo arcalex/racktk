@@ -1,0 +1,8 @@
+#!/bin/sh
+
+#
+# Youssef Eldakar <youssef.eldakar@bibalex.org>
+#
+
+hs -h "$@" | while read i;do ssh-keygen -R $i;done
+hs -i "$@" | while read i;do ssh-keygen -R $i;done
