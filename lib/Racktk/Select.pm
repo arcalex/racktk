@@ -302,8 +302,8 @@ sub lookup_range
   {
     $h = join "", @i;
 
-    $i = `dig +short $h.$d`;
-    chomp $i;
+    my ($name, $aliases, $addrtype, $length, @addrs) = gethostbyname $h;
+    $i = join ".", unpack ("C4", $addrs[0]);
 
     $x = format_ip ( $i );
 
