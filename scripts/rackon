@@ -1,8 +1,152 @@
-#!/bin/sh
+#!/usr/bin/perl -w
+
+
+# Copyright (C) 2015 Bibliotheca Alexandrina <http://www.bibalex.org/>
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or (at
+# your option) any later version.
+
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 
 #
 # Youssef Eldakar <youssef.eldakar@bibalex.org>
 #
 
+#hs -h "$@" | while read i;do etherwake $i;done
 
-hs -h "$@" | while read i;do etherwake $i;done
+use strict;
+
+use Net::hostent;
+use Socket;
+
+
+my $default_ip = "255.255.255.255";
+my $default_port = getservbyname ("discard", "udp");
+
+my $sa = pack_sockaddr_in ($default_port, gethostbyname ($default_ip)->addr);
+
+# This is code adapted from the wakeonlan program.
+# http://gsd.di.uminho.pt/jpo/software/wakeonlan/
+
+sub magic_send
+{
+  foreach my $pkt (@_)
+  {
+    # Allocate.
+    socket
+      (S, AF_INET, SOCK_DGRAM, getprotobyname ('udp'));
+
+    # Set options.
+    setsockopt
+      (S, SOL_SOCKET, SO_BROADCAST, 1);
+
+    # Send.
+    send
+      (S, $pkt, 0, $sa);
+
+    close
+      (S);
+  }
+
+}
+
+sub magic_gen
+{
+  my @pkts;
+
+  foreach my $mac (@_)
+  {
+    push @pkts, chr (0xff) x 6 . join ("", map {chr (hex ($_))} split (/:/, $mac)) x 16;
+  }
+
+  return @pkts;
+}
+
+
+use File::Basename;
+use Getopt::Std;
+
+use lib "/afs/archive.bibalex.org/git/racktk/lib";
+use Racktk::Select;
+
+my %opts;
+
+getopts ( "cr:ag:m:", \%opts ) 
+
+  && (    defined $opts{a}
+       || defined $opts{g}
+       || defined $opts{m} ) || help () && exit 1;
+
+
+    if ( my @results = Racktk::Select::select ( \%opts ) )
+    {
+      # Host selection returned results to process.
+      poweron
+           ( @results );
+    }
+ else
+    {
+      help ();
+    }
+
+
+sub help
+{
+  print STDERR basename ( $0 ), " ", "[-a] [-g groups] [-m ranges]\n";
+}
+
+sub poweron
+{
+# my $i;
+# my $n;
+
+# for ( $i = 0, $n = @_ - 1; $i <= $n; $i++ )
+# {
+    magic_send (magic_gen (ethers (@_)));
+# }
+}
+
+# Belongs in Racktk::Select.
+sub ethers
+{
+  my $i;
+  my $n;
+
+  my @F;
+  my @macs;
+
+   open ETHERS, "</etc/ethers" || return ();
+
+  # Assume file sorted on field 2, field 2 is bare hostname (does not
+  # search using FQDN, IP).
+
+  for ( $i = 0, $n = @_ - 1; $i <= $n; $i++ )
+  {
+    # File exhausted.
+    last if ( eof ETHERS );
+
+    while ( <ETHERS> )
+    {
+      @F = split;
+
+      if ( $F[1] eq $_[$i]->{h} )
+      {
+        push @macs, $F[0];
+        last;
+      }
+    }
+  }
+
+  close ETHERS;
+
+  return @macs;
+}
