@@ -61,7 +61,7 @@ sub ck_loop
 
   my $host;
 
-  # The keys of this hash are host names. The codes are references to
+  # The keys of this hash are host names. The values are references to
   # 2-element lists, where the first element is the host status code,
   # and the second element is a change flag that is set if the host
   # changes status relative to the previous pass and reset otherwise.
