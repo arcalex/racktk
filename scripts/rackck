@@ -67,14 +67,18 @@ sub ck_loop
   # changes status relative to the previous pass and reset otherwise.
   my %hosts;
 
-  # A tally of how many hosts change status during this pass.
+  # A tally of hosts that change status during this pass.
   my $status_changes;
 
-  my %status_strings = ( 0 => "UP with SSH", 1 => "UP", 2 => "DOWN" );
+  # A tally of hosts/status.
+  my @summary;
+
+  my @status_strings = ( "UP", "UP (No SSH)", "DOWN" );
 
   while ( 1 )
   {
     $status_changes = 0;
+    @summary = ( 0 ) x @status_strings;
 
     for ( $i = 0, $n = @_ - 1; $i <= $n; $i++ )
     {
@@ -112,6 +116,8 @@ sub ck_loop
       {
         $hosts{$_[$i]->{h}} = [ $status, 0 ];
       }
+
+      $summary[$status]++;
     }
 
     # Get the current local time and format it into a string such as
@@ -121,12 +127,12 @@ sub ck_loop
     if ( $status_changes )
     {
       # Print the local time string.
-      printf "$t\n";
+      printf "$t [%s]\n", join ( " ", @summary );
 
-      foreach $status ( sort keys %status_strings )
+      foreach $status ( 0..$#status_strings )
       {
         # Print the status string.
-        printf " " x 2 . "$status_strings{$status}\n";
+        printf " " x 2 . "$status_strings[$status]\n";
 
         foreach $host ( sort keys %hosts )
         {
