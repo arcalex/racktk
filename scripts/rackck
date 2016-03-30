@@ -22,7 +22,7 @@ use Racktk::Select;
 
 my %opts;
 
-getopts ( "cr:ag:m:", \%opts ) 
+getopts ( "cr:ag:m:012", \%opts ) 
 
   && (    defined $opts{a}
        || defined $opts{g}
@@ -43,7 +43,7 @@ getopts ( "cr:ag:m:", \%opts )
 
 sub help
 {
-  print STDERR basename ( $0 ), " ", "[-a] [-g groups] [-m ranges]\n";
+  print STDERR basename ( $0 ), " ", "[-a] [-g groups] [-m ranges] [-0] [-1] [-2]\n";
 }
 
 sub ck_loop
@@ -126,11 +126,13 @@ sub ck_loop
 
     if ( $status_changes )
     {
-      # Print the local time string.
-      printf "$t [%s]\n", join ( " ", @summary );
+      # Print the local time string and hosts/status.
+      printf "$t [%s]\n", join ( " ", map {sprintf "%4d", $_} @summary );
 
       foreach $status ( 0..$#status_strings )
       {
+        next unless $opts{$status};
+
         # Print the status string.
         printf " " x 2 . "$status_strings[$status]\n";
 
