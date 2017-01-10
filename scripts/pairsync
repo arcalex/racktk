@@ -34,44 +34,62 @@ GetOptions('m=s' => \$d_hostname, 'help|h!' => \$help, 'without-includes-file' =
 
 unless (defined($d_hostname))
 {
-
-# If this host has an even hostnum, the pair is + 1 up. Otherwise, - 1
-# down. Fairly enough, it is assumed numbers will not overflow and break
-# the padding.
-if ($2 % 2 == 0)
-{
-
-$d_hostname = $1 . sprintf ( "%0${l}d", $2 + 1 );
-
-}
-else
-{
-
-$d_hostname = $1 . sprintf ( "%0${l}d", $2 - 1 );
-
-}
-
+  # If this host has an even hostnum, the pair is at hostnum add 1 (sub
+  # 1 otherwise), and it is assumed numbers will not overflow and break
+  # the padding.
+  if ($2 % 2 == 0)
+  {
+    $d_hostname = $1 . sprintf ( "%0${l}d", $2 + 1 );
+  }
+  else
+  {
+    $d_hostname = $1 . sprintf ( "%0${l}d", $2 - 1 );
+  }
 }
 
 foreach (@ARGV)
 {
-  # Get the absolute path. Also, collapse successive slashes, trim
-  # trailing slash.
+  # Get the absolute path, collapse successive slashes, trim trailing
+  # slash.
   $_ = abs_path("$_");
 
   $f = "$_";
   unless (-d $f)
   {
-    warn    "$f: Not a directory";
+    warn "$f: Not a directory";
     next;
   }
 
   $f = "$_/.pairsync.includes";
   unless (-f $f && -r $f)
   {
-    warn    "$f: Not a regular file, unreadable, or does not exist";
+    warn "$f: Not a regular file, unreadable, or does not exist";
     next;
   }
 
-  `rsync -a --delete --include=/.pairsync.includes --include-from="$_/.pairsync.includes" --exclude="*" "$_/" $d_hostname:"$_/"`;
+  $c = "rsync -a --delete \"$_/\" $d_hostname:\"$_/\" --include-from=\"$f\" --include=\"$f\"";
+  $thenexec = undef;
+
+  $f = "$_/.pairsync.thenexec";
+  if (-e $f)
+  {
+    unless (-f $f && -r $f)
+    {
+      warn "$f: Exists but not a regular file or unreadable";
+      next;
+    }
+
+    $c .= " --include=\"$f\"";
+    $thenexec = $f;
+  }
+
+  $c .= " --exclude=\"*\"";
+ 
+  `$c`;
+
+  if ($thenexec)
+  {
+                    `/bin/sh <\"$thenexec\"`;
+    `ssh $d_hostname /bin/sh <\"$thenexec\"`;
+  }
 }
