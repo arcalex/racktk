@@ -53,39 +53,50 @@ foreach (@ARGV)
   # slash.
   $_ = abs_path("$_");
 
-  $f = "$_";
-  unless (-d $f)
+  unless (-d $_)
   {
-    warn "$f: Not a directory";
+    warn "$_: Not a directory";
     next;
   }
 
-  $f = "$_/.pairsync.includes";
-  unless (-f $f && -r $f)
-  {
-    warn "$f: Not a regular file, unreadable, or does not exist";
-    next;
-  }
+  $sync = "rsync -a --delete '$_/' '$d_hostname:$_/'";
 
-  $c = "rsync -a --delete \"$_/\" $d_hostname:\"$_/\" --include-from=\"$f\" --include=\"$f\"";
-  $thenexec = undef;
+  undef $includes;
+  $f = ".pairsync.includes";
 
-  $f = "$_/.pairsync.thenexec";
-  if (-e $f)
+  if (-e "$_/$f")
   {
-    unless (-f $f && -r $f)
+    unless (-f "$_/$f" && -r "$_/$f")
     {
-      warn "$f: Exists but not a regular file or unreadable";
+      warn "$_/$f: Exists but not a regular file or unreadable";
       next;
     }
 
-    $c .= " --include=\"$f\"";
-    $thenexec = $f;
+    $sync .= " --include='/$f' --include-from='$_/$f'";
+    $includes = "$_/$f";
   }
 
-  $c .= " --exclude=\"*\"";
+  undef $thenexec;
+  $f = ".pairsync.thenexec";
+
+  if (-e "$_/$f")
+  {
+    unless (-f "$_/$f" && -r "$_/$f")
+    {
+      warn "$_/$f: Exists but not a regular file or unreadable";
+      next;
+    }
+
+    $sync .= " --include='/$f'" if defined $includes;
+    $thenexec = "$_/$f";
+  }
+
+  if ($includes)
+  {
+    $sync .= " --exclude='*'";
+  }
  
-  `$c`;
+  `$sync`;
 
   if ($thenexec)
   {
