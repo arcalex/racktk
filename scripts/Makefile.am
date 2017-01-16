@@ -1,10 +1,10 @@
 bin_SCRIPTS = \
   alphasplit \
   even \
-  hs \
   numbers \
   odd \
   pairsync \
+  rack \
   rackbootdefault \
   rackck \
   rackcp \

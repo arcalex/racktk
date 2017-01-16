@@ -21,7 +21,7 @@
 # Youssef Eldakar <youssef.eldakar@bibalex.org>
 #
 
-#hs -h "$@" | while read i;do etherwake $i;done
+#rack -h "$@" | while read i;do etherwake $i;done
 
 use strict;
 

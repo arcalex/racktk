@@ -5,4 +5,4 @@
 #
 
 
-hs -h "$@" | while read i;do < /dev/null rsh $i 'reboot > /dev/null 2> /dev/null &';done
+rack -h "$@" | while read i;do < /dev/null rsh $i 'reboot > /dev/null 2> /dev/null &';done
