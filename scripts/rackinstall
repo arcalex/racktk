@@ -162,12 +162,16 @@ sub auto
 {
   # Set boot default to auto.
   `rackbootdefault -m $_[0] auto`;
+
+  `pairsync /srv/tftp` if `which pairsync`;
 }
 
 sub localboot
 {
   # Set boot default to localboot.
   `rackbootdefault -m $_[0] localboot`;
+
+  `pairsync /srv/tftp` if `which pairsync`;
 }
 
 sub reboot
