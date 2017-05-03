@@ -1,13 +1,24 @@
 #!/usr/bin/perl -w
 
-#
-# Youssef Eldakar <youssef.eldakar@bibalex.org>
-#
+
+# Copyright (C) 2015 Bibliotheca Alexandrina <http://www.bibalex.org/>
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or (at
+# your option) any later version.
+
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 
 #
-
-
-
+# Mahmoud Mubarak <mahmoud.mubarak@bibalex.org>
 #
 
 use strict;
@@ -18,9 +29,11 @@ use Getopt::Std;
 use lib "/afs/archive.bibalex.org/git/racktk/lib";
 use Racktk::Select;
 
+use Net::SSH qw ( sshopen3 );
+
 my %opts;
 
-getopts ( "cr:ag:m:", \%opts ) 
+getopts ( "Mcr:ag:m:n:", \%opts )
 
   && (    defined $opts{a}
        || defined $opts{g}
@@ -31,33 +44,255 @@ unless ( defined ( $opts{r} ) )
   $opts{r} = "rsh";
 }
 
+unless ( defined ( $opts{n} ) )
+{
+  $opts{n} = 0; # Default fork limit to unlimited.
+}
+else
+{
+  if ( $opts{n} < 0 )
+  {
+    die "-n $opts{n}: Invalid fork limit";
+  }
+}
 
-    if ( my @results = Racktk::Select::select ( \%opts ) )
-    {
-      # Host selection returned results to process.
-      sh
-           ( @results );
-    }
- else
-    {
-      help ();
-    }
+if ( my @results = Racktk::Select::select ( \%opts ) )
+{
+  # Host selection returned results to process.
 
+  if ( defined ( $opts{c} ) )
+  {
+    ssh_c_n ( @results );
+  }
+  else
+  {
+    ssh ( @results );
+  }
+}
+else
+{
+  help ();
+}
 
 sub help
 {
-  print STDERR basename ( $0 ), " ", "[-r rsh] [-a] [-g groups] [-m ranges]\n";
+  print basename ( $0 ), " ", "[-r rsh] [-M] [-c] [-a] [-g groups] [-m ranges] [-n children]\n";
 }
 
-sub sh
+sub ssh
 {
   my $i;
   my $n;
 
+  my $child_pid_out;
+  my $child_pid_err;
 
+  my $hostname = "";
+  my $hostname_prefix = "";
 
   for ( $i = 0, $n = @_ - 1; $i <= $n; $i++ )
   {
+    $hostname = $_[$i]->{h};
 
+    if ( defined ( $opts{M} ) )
+    {
+      $hostname_prefix = "$hostname: ";
+    }
+
+    sshopen3 ( $hostname, undef, *OUT, *ERR, @ARGV ) || die "ssh: $!";
+
+    if ( ( $child_pid_out = fork ) == 0 )
+    {
+      # Child process for stdout.
+      while ( <OUT> )
+      {
+        chomp();
+        print STDOUT "$hostname_prefix$_\n";
+      }
+
+      exit 0;
+    }
+
+    if ( ( $child_pid_err = fork ) == 0 )
+    {
+      # Child process for stderr.
+      while ( <ERR> )
+      {
+        chomp();
+        print STDERR "$hostname_prefix$_\n";
+      }
+
+      exit 0;
+    }
+
+    if ( $child_pid_out != 0 && $child_pid_err != 0 )
+    {
+      # Parent process.
+      waitpid ( $child_pid_out, 0 );
+      waitpid ( $child_pid_err, 0 );
+      close (OUT);
+      close (ERR);
+    }
+  }
+}
+
+sub ssh_c
+{
+  my $i;
+  my $n;
+
+  my $pid;
+  my %child_pids;
+
+  my $hostname = "";
+  my $hostname_prefix = "";
+
+  for ( $i = 0, $n = @_ - 1; $i <= $n; $i++ )
+  {
+    $hostname = $_[$i]->{h};
+
+    if ( defined ( $opts{M} ) )
+    {
+      $hostname_prefix = "$hostname: ";
+    }
+
+    sshopen3 ( $hostname, undef, *OUT, *ERR, @ARGV ) || die "ssh: $!";
+
+    if ( ( $pid = fork ) == 0 )
+    {
+      # Child process for stdout.
+      while ( <OUT> )
+      {
+        chomp();
+        print STDOUT "$hostname_prefix$_\n";
+      }
+
+      close (OUT);
+      exit 0;
+    }
+    else
+    {
+      $child_pids{$pid} = $hostname;
+    }
+
+    if ( ( $pid = fork ) == 0 )
+    {
+      # Child process for stderr.
+      while ( <ERR> )
+      {
+        chomp();
+        print STDERR "$hostname_prefix$_\n";
+      }
+
+      close (ERR);
+      exit 0;
+    }
+    else
+    {
+      $child_pids{$pid} = $hostname;
+    }
+  }
+
+  while ( %child_pids )
+  {
+    $pid = wait;
+    if ( $child_pids{$pid} )
+    {
+      delete $child_pids{$pid};
+    }
+  }
+}
+
+sub ssh_c_n
+{
+  my $i;
+  my $n;
+
+  my $pid;
+  my %child_pids;
+
+  my $hostname = "";
+  my $hostname_prefix = "";
+
+  my $fork_limit = 0;
+
+  for ( $i = 0; $i <= @_ - 1; $i++ )
+  {
+    $hostname = $_[$i]->{h};
+
+    if ( defined ( $opts{M} ) )
+    {
+      $hostname_prefix = "$hostname: ";
+    }
+
+    sshopen3 ( $hostname, undef, *OUT, *ERR, @ARGV ) || die "ssh: $!";
+
+    while (1)
+    {
+      if ( $fork_limit < $opts{n} - 1 || $opts{n} == 0 )
+      {
+
+        if ( ( $pid = fork ) == 0 )
+        {
+          # Child process for output.
+          while ( <OUT> )
+          {
+            chomp();
+            print STDOUT "$hostname_prefix$_\n";
+          }
+
+          close (OUT);
+          exit 0;
+        }
+        else
+        {
+          # Parent process.
+          $fork_limit++;
+          $child_pids{$pid} = $hostname;
+        }
+
+        if ( ( $pid = fork ) == 0 )
+        {
+          # Child process for stderr.
+          while ( <ERR> )
+          {
+            chomp();
+            print STDERR "$hostname_prefix$_\n";
+          }
+
+          close (ERR);
+          exit 0;
+        }
+        else
+        {
+          # Parent process.
+          $fork_limit++;
+          $child_pids{$pid} = $hostname;
+        }
+
+        last;
+      }
+
+      while ( %child_pids )
+      {
+        $pid = wait;
+        if ( $child_pids{$pid} )
+        {
+          $fork_limit--;
+          delete $child_pids{$pid};
+          last;
+        }
+      }
+    }
+  }
+
+  while ( %child_pids )
+  {
+    $pid = wait;
+    if ( $child_pids{$pid} )
+    {
+      $fork_limit--;
+      delete $child_pids{$pid};
+    }
   }
 }
