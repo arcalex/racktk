@@ -127,6 +127,8 @@ sub install
              {
                   localboot
                     ( $_[$i]->{h} );
+                  sshkeydel
+                    ( $_[$i]->{h} );
                   $s[$i] = 5;
              }
         }
@@ -184,4 +186,10 @@ sub on
 {
   # Use a Magic Packet to power host on.
   `rackon -m $_[0]`;
+}
+
+sub sshkeydel
+{
+  # Clear SSH keys in known_hosts.
+  `racksshkeydel -m $_[0]`;
 }
